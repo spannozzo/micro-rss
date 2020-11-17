@@ -1,0 +1,138 @@
+version: '3' 
+services:
+  db-feed-item:
+    restart: always
+    image: postgres:alpine
+    container_name: "feed-item_db"
+    environment:
+      POSTGRES_USER: 'root'
+      POSTGRES_PASSWORD: '1234'
+      POSTGRES_DB: 'item-db'
+    ports:
+      - 5432:5432
+    expose:
+      - 5432
+    networks:
+      - network-internal
+  db-feed: 
+    restart: always
+    image: postgres:alpine
+    container_name: "feed_db"
+    command: -p 5431
+    environment:
+      POSTGRES_USER: 'root'
+      POSTGRES_PASSWORD: '1234'
+      POSTGRES_DB: 'feed_db'
+    ports:
+      - 5431:5431
+    expose:
+      - 5431
+    networks:
+      - network-internal
+  feed-receiver:
+    restart: always
+    image: spannozzo/rss-receiver:latest
+    build: 
+      context: ./rss-receiver/
+      dockerfile: ./src/main/docker/Dockerfile.jvm
+    container_name: rss-receiver-app
+    environment:
+      - quarkus.http.port=8081
+      - kafka.bootstrap.servers=kafka:9092
+    ports:
+      - '8081:8081'
+    depends_on:
+      - "kafka"
+      - "app"
+    networks:
+      - network-internal
+  feed-crud:
+    restart: always
+    image: spannozzo/feed-crud:latest
+    build: 
+      context: ./feed-crud/
+      dockerfile: ./src/main/docker/Dockerfile.jvm
+    container_name: feed-crud
+    environment:
+      - quarkus.http.port=8082
+      - quarkus.datasource.jdbc.url=jdbc:postgresql://db-feed:5431/feed_db
+      - quarkus.datasource.username=root
+      - quarkus.datasource.password=1234
+    ports:
+      - '8082:8082'
+    depends_on:
+      - "db-feed"
+    networks:
+      - network-internal
+  feed-crud-item:
+    restart: always
+    image: spannozzo/feed-item-crud:latest
+    build: 
+      context: ./feed-item-crud/
+      dockerfile: ./src/main/docker/Dockerfile.jvm
+    container_name: feed-item-crud
+    environment:
+      - quarkus.http.port=8083
+      - quarkus.datasource.jdbc.url=jdbc:postgresql://db-feed-item:5432/item-db
+      - quarkus.datasource.username=root
+      - quarkus.datasource.password=1234
+      - kafka.bootstrap.servers=kafka:9092
+    ports:
+      - '8083:8083'
+    depends_on:
+      - "db-feed-item"
+    networks:
+      - network-internal
+  
+  zookeeper:
+    container_name: zookeeper
+    image: strimzi/kafka:0.11.3-kafka-2.1.0
+    command: [
+      "sh", "-c",
+      "bin/zookeeper-server-start.sh config/zookeeper.properties"
+    ]
+    ports:
+      - "9093:2181"
+    environment:
+      LOG_DIR: /tmp/logs
+    networks:
+      - network-internal
+  kafka:
+    container_name: kafka
+    image: strimzi/kafka:0.11.3-kafka-2.1.0
+    command: [
+      "sh", "-c",
+      "bin/kafka-server-start.sh config/server.properties --override listeners=$${KAFKA_LISTENERS} --override advertised.listeners=$${KAFKA_ADVERTISED_LISTENERS} --override zookeeper.connect=$${KAFKA_ZOOKEEPER_CONNECT}"
+    ]
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      LOG_DIR: "/tmp/logs"
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    networks:
+      - network-internal
+  app:
+    restart: always
+    image: spannozzo/rss-reader:latest
+    build: 
+      context: ./rss-reader/
+      dockerfile: ./src/main/docker/Dockerfile.jvm
+    container_name: rss-reader-app      
+    environment:
+       - kafka.bootstrap.servers=kafka:9092
+       - feed-crud.url=http://feed-crud:8082/feeds
+       - feed-interval-seconds=15
+    ports:
+      - '8080:8080'
+    expose:
+      - '8080'
+    networks:
+      - network-internal
+  
+networks:
+  network-internal:
+    external: false 
