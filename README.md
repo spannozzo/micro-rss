@@ -24,7 +24,7 @@ The broker will dispatch the information to another kafka topic that will check 
 
 For parsing feeds I used an opensource apache library called Rome. This library support also the possibility to scan different feed urls together, so it will be easy eventually to modify the rest call in order to support multiple feeds by passing many feed ids.
 
-Since the feed and feed items are on separate dbs, and I have a one to many relationship from feed to feed-item, on each row of item table I'm associating the row with its feed not with feed id but with the rest url that provides the feed data. 
+Since the feed and feed items are on separate dbs, and I have a "one to many" relationship from feed to feed-item, on each row of item table I'm associating the row with its feed not with feed id but with the rest url that provides the feed data. 
 
 E.g. instead of 1 I will have **localhost:8082/feeds/1**. Moreover the feed deletion is logical, for avoiding unconsistencies.
 
@@ -51,7 +51,7 @@ curl --location --request GET 'http://localhost:8083/feeds/items/1'
 ## Getting Started / Installing
 You will need Docker, java 11 and Maven.
 
-First step is to run in each sub-folder mvn clean package. After that from the main folder you should run docker-compose --build -d.
+First step is to run in each sub-folder mvn clean package. After that,  from the main folder you should run docker-compose --build -d.
 
 At this point it should be everything up and running, so you can import into postman the curls commands showed before (or running them directly if you are using linux).
 
